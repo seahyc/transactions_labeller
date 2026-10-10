@@ -1,5 +1,6 @@
 /labelled_data/*
-.vscodesrc/bank-credit-card-transactions-categorisation/
+.vscode
+src/bank-credit-card-transactions-categorisation/
 .DS_Store
 *.egg-info/
 __pycache__/
