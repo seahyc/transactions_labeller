@@ -29,7 +29,8 @@ categories = [
     'Personal Expenses - Housing',
     'Company Expenses - Company Travel',
     'Company Expenses - Company Software Subscriptions',
-    'Others'
+    'Others - Miscellaneous',
+    'Others - Credit Card Repayment'
 ]
 
 def colorize_category(category_name: str, highlight: bool = False, match_text: Optional[str] = None) -> str:
@@ -60,7 +61,7 @@ def colorize_category(category_name: str, highlight: bool = False, match_text: O
             colored(subcategory[start_index:end_index], base_color, bg_color, attrs=attrs + ['underline', 'bold']) +
             colored(subcategory[end_index:], base_color, bg_color, attrs=attrs)
         )
-        return f"{colored(parent + ' - ', base_color, bg_color, attrs=attrs)}{highlighted_subcategory}" if parent != 'Others' else highlighted_subcategory
+        return f"{colored(parent + ' - ', base_color, bg_color, attrs=attrs)}{highlighted_subcategory}"
 
     # If no match or highlight, return the whole category colored
     return colored(category_name, base_color, bg_color, attrs=attrs)
@@ -119,23 +120,27 @@ def display_transaction(index: int, transactions_df: pd.DataFrame) -> None:
         'Description': transaction.get('Description', 'N/A')
     }
     
-    if pd.notna(transaction.get('Withdrawal')):
-        details['Withdrawal'] = f"{transaction['Withdrawal']:.2f}"
-    if pd.notna(transaction.get('Deposit')):
-        details['Deposit'] = f"{transaction['Deposit']:.2f}"
-    if pd.notna(transaction.get('Amount')):
-        details['Amount'] = f"{transaction['Amount']:.2f}"
-    
-    # If none are present, set Amount to 'N/A'
-    if not any(pd.notna(transaction.get(key)) for key in ['Withdrawal', 'Deposit', 'Amount']):
+    is_deposit = False
+    if pd.notna(transaction.get('Withdrawal')) or pd.notna(transaction.get('Deposit')):
+        details['Withdrawal'] = f"{transaction.get('Withdrawal', 'N/A'):.2f}" if pd.notna(transaction.get('Withdrawal')) else 'N/A'
+        details['Deposit'] = f"{transaction.get('Deposit', 'N/A'):.2f}" if pd.notna(transaction.get('Deposit')) else 'N/A'
+        is_deposit = pd.notna(transaction.get('Deposit'))
+    elif pd.notna(transaction.get('Amount')):
+        amount = transaction['Amount']
+        details['Amount'] = f"{amount:.2f}"
+        is_deposit = amount < 0
+    else:
         details['Amount'] = 'N/A'
+    
+    # Choose colors based on whether it's a deposit or negative amount
+    key_color = 'light_blue' if is_deposit else 'magenta'
+    value_color = 'light_green' if is_deposit else 'white'
     
     # Format output for left-aligned keys and values
     max_key_len = max(len(key) for key in list(details.keys()) + ['Transaction']) + 2
-    print(f"{colored('Transaction'.ljust(max_key_len), 'light_magenta', attrs=['bold'])}: {index + 1} of {total_transactions}, {progress:.1f}%")
+    print(f"{colored('Transaction'.ljust(max_key_len), key_color, attrs=['bold'])}: {colored(f'{index + 1} of {total_transactions}, {progress:.1f}%', value_color)}")
     for key, value in details.items():
-        # Adjust the formatting to align colons
-        print(f"{colored(key.ljust(max_key_len), 'light_magenta', attrs=['bold'])}: {value}")
+        print(f"{colored(key.ljust(max_key_len), key_color, attrs=['bold'])}: {colored(value, value_color)}")
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Label bank transactions from a PDF statement.')
@@ -218,6 +223,9 @@ def handle_user_input(
             highlight_index = best_match_index
     elif keypress == '\x7f':  # Handle backspace
         match_text = match_text[:-1]  # Remove the last character
+    elif keypress == '\x17':  # Handle Ctrl+W
+        match_text = ''  # Clear all typed characters
+        highlight_index = None  # Reset highlight index
     elif keypress == '\n':  # Enter key to confirm category selection
         if highlight_index is not None:
             selected_category = categories[highlight_index]
@@ -250,8 +258,8 @@ def save_labeled_transactions(transactions_df: pd.DataFrame, labels: list, pdf_f
     
     # Sort the DataFrame
     sorted_df = transactions_df.sort_values(
-        by=['Label_Frequency', 'Sort_Amount'],
-        ascending=[False, False]
+        by=['Label_Frequency', 'Label', 'Sort_Amount'],
+        ascending=[False, True, False]
     )
     
     # Remove temporary columns used for sorting

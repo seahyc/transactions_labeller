@@ -17,7 +17,6 @@ This project is a command-line tool for labeling bank transactions extracted fro
   - termcolor
   - getch
 
-
 ## Usage
 To run the application, use the following command:
 
